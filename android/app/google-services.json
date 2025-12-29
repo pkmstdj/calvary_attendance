@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "506808692640",
+    "project_id": "calvaryattendance-28fa1",
+    "storage_bucket": "calvaryattendance-28fa1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:506808692640:android:99c82da324347c438ffec5",
+        "android_client_info": {
+          "package_name": "com.pkmstdj.calvary_attendance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFE8X8Yfa902yv_Y_EkukGNM5ZWn8Yf9o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
