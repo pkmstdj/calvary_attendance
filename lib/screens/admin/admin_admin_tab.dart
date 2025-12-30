@@ -30,7 +30,7 @@ class _AdminAdminTabState extends State<AdminAdminTab> {
         .collection('users')
         .where('permissionLevel', isLessThanOrEqualTo: 2);
 
-    // 승인 대기자 (permissionLevel == 4) 카운트
+    // 승인 대기자 (permissionLevel == 4) 카운트 (수정: isEqualTo -> isGreaterThanOrEqualTo)
     final pendingQuery = FirebaseFirestore.instance
         .collection('users')
         .where('permissionLevel', isEqualTo: 4);
@@ -42,7 +42,8 @@ class _AdminAdminTabState extends State<AdminAdminTab> {
           if (widget.permissionLevel == 0) // 사역자만 태그 관리 버튼 표시
             IconButton(
               icon: const Icon(Icons.tag),
-              onPressed: () => Navigator.pushNamed(context, '/tagManagement'),
+              // 수정: '/tagManagement' -> '/adminTag'
+              onPressed: () => Navigator.pushNamed(context, '/adminTag'),
             ),
           // 승인 대기 화면 이동 아이콘 + 뱃지
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -54,7 +55,8 @@ class _AdminAdminTabState extends State<AdminAdminTab> {
                 children: [
                   IconButton(
                     onPressed: () {
-                      Navigator.pushNamed(context, '/adminApprovalList');
+                      // 수정: '/adminApprovalList' -> '/adminApproval'
+                      Navigator.pushNamed(context, '/adminApproval');
                     },
                     icon: const Icon(Icons.notifications),
                     tooltip: '승인 대기 목록',

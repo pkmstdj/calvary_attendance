@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:elegant_notification/elegant_notification.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'create_user_screen.dart';
+import 'main_root_screen.dart';
 
 class PhoneCheckScreen extends StatefulWidget {
   const PhoneCheckScreen({super.key});
@@ -11,75 +13,12 @@ class PhoneCheckScreen extends StatefulWidget {
 }
 
 class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
-  final TextEditingController _phoneController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _triedAuto = false;
-  bool _isFormatting = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _phoneController.addListener(_formatPhoneNumber);
-    _tryAutoLogin();
-  }
-
-  void _formatPhoneNumber() {
-    if (_isFormatting) return;
-
-    _isFormatting = true;
-    final text = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    var formatted = '';
-
-    if (text.length > 3) {
-      formatted += text.substring(0, 3);
-      if (text.length > 7) {
-        formatted += '-${text.substring(3, 7)}';
-        if (text.length > 11) {
-          formatted += '-${text.substring(7, 11)}';
-        } else {
-          formatted += '-${text.substring(7)}';
-        }
-      } else {
-        formatted += '-${text.substring(3)}';
-      }
-    } else {
-      formatted = text;
-    }
-
-    _phoneController.value = _phoneController.value.copyWith(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-    _isFormatting = false;
-  }
-
-  Future<void> _tryAutoLogin() async {
-    setState(() {
-      _isLoading = true;
-    });
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString('savedPhoneNumber');
-    if (saved != null && saved.isNotEmpty) {
-      await _checkUserAndNavigate(saved, remember: false);
-    }
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _triedAuto = true;
-      });
-    }
-  }
-
-  Future<void> _checkUserAndNavigate(
-    String phoneNumber, {
-    bool remember = true,
-  }) async {
-    final normalized = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
-    if (normalized.isEmpty) {
-      ElegantNotification.error(
-        title: const Text('오류'),
-        description: const Text('전화번호를 입력해 주세요.'),
-      ).show(context);
+  Future<void> _checkPhoneNumber() async {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
@@ -87,38 +26,44 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
       _isLoading = true;
     });
 
+    final phoneNumber = '010${_phoneController.text}';
+
     try {
-      final doc = await FirebaseFirestore.instance
+      // 수정: doc(phoneNumber).get() -> where('phoneNumber', ...).get()
+      final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(normalized)
+          .where('phoneNumber', isEqualTo: phoneNumber)
+          .limit(1)
           .get();
 
-      if (remember) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('savedPhoneNumber', normalized);
-      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('savedPhoneNumber', phoneNumber);
 
       if (!mounted) return;
 
-      if (doc.exists) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/root',
-          arguments: normalized,
+      if (querySnapshot.docs.isNotEmpty) {
+        // 사용자가 존재하면 메인 화면으로 이동
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const MainRootScreen(),
+            settings: RouteSettings(arguments: phoneNumber),
+          ),
         );
       } else {
-        Navigator.pushReplacementNamed(
-          context,
-          '/createUser',
-          arguments: normalized,
+        // 사용자가 없으면 정보 등록 화면으로 이동
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const CreateUserScreen(),
+          ),
         );
       }
     } catch (e) {
-      if (!mounted) return;
-      ElegantNotification.error(
-        title: const Text('오류'),
-        description: Text('오류가 발생했습니다: $e'),
-      ).show(context);
+      // 오류 처리
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('오류가 발생했습니다: $e')),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -128,63 +73,70 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
     }
   }
 
-  void _onSubmit() {
-    _checkUserAndNavigate(_phoneController.text);
-  }
-
-  @override
-  void dispose() {
-    _phoneController.removeListener(_formatPhoneNumber);
-    _phoneController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_triedAuto || _isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('전화번호 확인'),
-      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '처음 한 번만 전화번호를 입력하면\n다음부터는 자동으로 접속됩니다.',
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: '전화번호',
-                  border: OutlineInputBorder(),
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(),
+                const Text(
+                  '반갑습니다!',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _onSubmit,
-                  child: const Text(
-                    '확인',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                const SizedBox(height: 8),
+                const Text(
+                  '서비스를 이용하시려면 전화번호를 입력해주세요.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 40),
+                Row(
+                  children: [
+                    const Text('010', style: TextStyle(fontSize: 18)),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 8,
+                        decoration: const InputDecoration(
+                          labelText: '전화번호 8자리',
+                          counterText: '',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null ||
+                              value.isEmpty ||
+                              value.length != 8) {
+                            return '8자리를 정확히 입력해주세요.';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _checkPhoneNumber,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('확인'),
                   ),
                 ),
-              ),
-            ],
+                const Spacer(flex: 2),
+              ],
+            ),
           ),
         ),
       ),

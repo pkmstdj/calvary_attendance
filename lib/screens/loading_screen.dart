@@ -1,7 +1,7 @@
-
 import 'dart:async';
 import 'package:calvary_attendance/screens/user/main_root_screen.dart';
 import 'package:calvary_attendance/screens/user/phone_check_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -29,16 +29,29 @@ class _LoadingScreenState extends State<LoadingScreen> {
     final savedPhoneNumber = prefs.getString('savedPhoneNumber');
 
     if (savedPhoneNumber != null && savedPhoneNumber.isNotEmpty) {
-      // 저장된 전화번호가 있으면 메인 화면으로 이동
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const MainRootScreen(),
-          // MainRootScreen이 arguments를 필요로 하므로 전달합니다.
-          settings: RouteSettings(arguments: savedPhoneNumber),
-        ),
-      );
+      // 수정: doc(phoneNumber).get() -> where('phoneNumber', ...).get()
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phoneNumber', isEqualTo: savedPhoneNumber)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        // 계정이 존재하면 메인 화면으로 이동
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const MainRootScreen(),
+            settings: RouteSettings(arguments: savedPhoneNumber),
+          ),
+        );
+      } else {
+        // 계정이 없으면 (등록 미완료), 전화번호 확인 화면으로 이동
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const PhoneCheckScreen()),
+        );
+      }
     } else {
-      // 저장된 전화번호가 없으면 로그인 화면으로 이동
+      // 저장된 전화번호가 없으면 전화번호 확인 화면으로 이동
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const PhoneCheckScreen()),
       );

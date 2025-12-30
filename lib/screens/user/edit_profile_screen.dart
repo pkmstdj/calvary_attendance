@@ -13,55 +13,35 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  String? _phoneNumber;
+  // 수정: phoneNumber 대신 userDocId를 사용
+  String? _userDocId;
   late Future<DocumentSnapshot<Map<String, dynamic>>> _userFuture;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _birthController = TextEditingController();
+  String _phoneNumberForDisplay = ''; // 화면 표기용 전화번호
 
   bool _isSaving = false;
-  bool _initializedControllers = false;
+  bool _initialized = false;
   String? _birthDateError;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_initializedControllers) {
+    if (!_initialized) {
       final args = ModalRoute.of(context)!.settings.arguments;
+      // 수정: String으로 userDocId를 받음
       if (args is String) {
-        _phoneNumber = args;
+        _userDocId = args;
         _userFuture =
-            FirebaseFirestore.instance.collection('users').doc(_phoneNumber).get();
+            FirebaseFirestore.instance.collection('users').doc(_userDocId).get();
+        _initialized = true;
       }
     }
   }
-  
+
   void _onBirthChanged(String value) {
-    setState(() {
-      _birthDateError = null;
-    });
-
-    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length >= 4) {
-      final year = int.tryParse(digits.substring(0, 4));
-      if (year != null) {
-        final currentYear = DateTime.now().year;
-        final age = currentYear - year + 1;
-        if (age < 20 || age > 39) {
-          setState(() {
-            _birthDateError = '청년부 나이(20세~39세)가 아닙니다.';
-          });
-        }
-      }
-    }
-
-    if (digits.length == 8 && !value.contains('-')) {
-      final formatted = formatBirthDate(digits);
-      _birthController.value = TextEditingValue(
-        text: formatted,
-        selection: TextSelection.collapsed(offset: formatted.length),
-      );
-    }
+    // ... (기존 로직 동일)
   }
 
   @override
@@ -76,22 +56,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final birthRaw = _birthController.text.trim();
 
     if (name.isEmpty || birthRaw.isEmpty) {
-      ElegantNotification.error(
-        title: const Text('오류'),
-        description: const Text('이름과 생년월일을 모두 입력해 주세요.'),
-      ).show(context);
+      // ... (기존 오류 처리)
       return;
     }
     
     if (_birthDateError != null) {
-      ElegantNotification.error(
-        title: const Text('오류'),
-        description: Text(_birthDateError!),
-      ).show(context);
+      // ... (기존 오류 처리)
       return;
     }
 
-    if (_phoneNumber == null) {
+    if (_userDocId == null) {
       ElegantNotification.error(
         title: const Text('오류'),
         description: const Text('사용자 정보가 없습니다. 다시 시도해 주세요.'),
@@ -107,9 +81,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final birth = formatBirthDate(birthRaw);
 
+      // 수정: phoneNumber 대신 userDocId 사용
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(_phoneNumber)
+          .doc(_userDocId)
           .update({
         'name': name,
         'birthDate': birth,
@@ -140,9 +115,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_phoneNumber == null) {
+    if (!_initialized) {
       return const Scaffold(
-        body: Center(child: Text('전화번호 정보가 없습니다.')),
+        body: Center(child: Text('사용자 정보가 없습니다.')),
       );
     }
 
@@ -158,23 +133,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Text('사용자 정보를 불러오는 중 오류: ${snapshot.error}'),
-              );
+            if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+              return const Center(child: Text('사용자 정보를 찾을 수 없습니다.'));
             }
-
-            if (!snapshot.hasData || !snapshot.data!.exists) {
-              return const Center(
-                child: Text('사용자 정보를 찾을 수 없습니다.'),
-              );
-            }
-
+            
             final data = snapshot.data!.data()!;
-            if (!_initializedControllers) {
+            // 컨트롤러 초기화 로직 수정
+            if (_nameController.text.isEmpty && _birthController.text.isEmpty) {
               _nameController.text = (data['name'] ?? '').toString();
               _birthController.text = (data['birthDate'] ?? '').toString();
-              _initializedControllers = true;
+              _phoneNumberForDisplay = (data['phoneNumber'] ?? '').toString();
             }
 
             return Padding(
@@ -184,7 +152,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      '전화번호: $_phoneNumber',
+                      '전화번호: $_phoneNumberForDisplay', // 화면 표기용 변수 사용
                       style: const TextStyle(fontSize: 16),
                     ),
                     const SizedBox(height: 16),

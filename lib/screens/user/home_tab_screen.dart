@@ -1,9 +1,6 @@
-
-import 'dart:async';
-
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart' hide CarouselController;
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import './photo_view_screen.dart';
@@ -31,12 +28,11 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
   Map<String, List<String>> _bulletinImages = {};
   bool _isLoading = true;
   int _currentCarouselIndex = 0;
-  final CSCarouselController _carouselController = CSCarouselController();
+  final CarouselSliderController _carouselController = CarouselSliderController();
 
   @override
   void initState() {
     super.initState();
-    // LoadingScreen에서 로그인 상태를 보장해주므로, 바로 데이터를 가져옵니다.
     _fetchBulletins();
   }
 
@@ -44,7 +40,6 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
     try {
       final ListResult result = await _storage.ref('news').listAll();
       final allFiles = result.items;
-      print('Found \${allFiles.length} files in /news/. Processing...');
       Map<String, List<String>> bulletins = {};
       final RegExp dateRegExp = RegExp(r'news_(\d{6})');
 
@@ -52,23 +47,19 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
         final match = dateRegExp.firstMatch(file.name);
         if (match != null) {
           final dateStr = match.group(1)!;
-          print('Found bulletin for date: \$dateStr from file: \${file.name}');
-
           if (bulletins.containsKey(dateStr)) {
             bulletins[dateStr]!.add(await file.getDownloadURL());
           } else {
             bulletins[dateStr] = [await file.getDownloadURL()];
           }
-        } else {
-          print('Skipping file with non-matching name: \${file.name}');
         }
       }
-      print('Processed \${bulletins.length} unique dates.');
-      if (bulletins.isEmpty && allFiles.isNotEmpty) {
-        print('WARNING: No files matched the expected naming convention \'news_yymmdd_...\'');
-      }
 
+      final today = DateFormat('yyMMdd').format(DateTime.now());
+      
       final sortedDates = bulletins.keys.toList()
+        .where((date) => date.compareTo(today) <= 0)
+        .toList()
         ..sort((a, b) => b.compareTo(a));
 
       if (mounted) {
@@ -82,7 +73,6 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
         });
       }
     } catch (e) {
-      print('Error fetching bulletins: \$e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -92,16 +82,11 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
   }
 
   String _formatDate(String yymmdd) {
-    if (yymmdd.length != 6) {
-      return yymmdd;
-    }
+    if (yymmdd.length != 6) return yymmdd;
     try {
-      final yy = yymmdd.substring(0, 2);
-      final mm = yymmdd.substring(2, 4);
-      final dd = yymmdd.substring(4, 6);
-      return '$yy년 $mm월 $dd일';
+      return '20${yymmdd.substring(0, 2)}년 ${yymmdd.substring(2, 4)}월 ${yymmdd.substring(4, 6)}일';
     } catch (e) {
-      return yymmdd; // fallback
+      return yymmdd;
     }
   }
 
@@ -134,7 +119,7 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('순전한 주보',
+                const Text('YCC 주보',
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 DropdownButton<String>(
@@ -149,8 +134,7 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
                     setState(() {
                       _selectedDate = newValue;
                       _currentCarouselIndex = 0;
-                      final newImages = _bulletinImages[newValue] ?? [];
-                      if (newImages.isNotEmpty) {
+                      if ((_bulletinImages[newValue] ?? []).isNotEmpty) {
                         _carouselController.jumpToPage(0);
                       }
                     });

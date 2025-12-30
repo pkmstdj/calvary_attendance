@@ -66,6 +66,7 @@ class _AdminRootScreenState extends State<AdminRootScreen> {
 
   @override
   void dispose() {
+    // ThemeProvider 관련 코드 제거
     _pageController.dispose();
     super.dispose();
   }

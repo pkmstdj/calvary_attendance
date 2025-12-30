@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../admin/admin_root_screen.dart';
-import '../leader/group_management_tab_screen.dart'; // 소그룹 관리 화면 import
+import '../leader/group_management_tab_screen.dart';
 import '../teams/special_teams_screen.dart';
 import 'home_tab_screen.dart';
 import 'prayer_tab_screen.dart';
@@ -22,10 +22,12 @@ class _MainRootScreenState extends State<MainRootScreen> {
   final _controller = NotchBottomBarController(index: 0);
 
   String? _phoneNumber;
+  String? _userDocId;
   int _permissionLevel = 4;
   List<String> _userTags = [];
-  bool _hasSpecialTeamTag = false; // 특별팀 태그 소유 여부
+  bool _hasSpecialTeamTag = false;
   bool _initialized = false;
+  bool _isLoading = true;
 
   @override
   void didChangeDependencies() {
@@ -50,23 +52,29 @@ class _MainRootScreenState extends State<MainRootScreen> {
   }
 
   Future<void> _loadUser() async {
-    if (_phoneNumber == null) return;
+    if (_phoneNumber == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userQuery = await FirebaseFirestore.instance
           .collection('users')
-          .doc(_phoneNumber)
+          .where('phoneNumber', isEqualTo: _phoneNumber)
+          .limit(1)
           .get();
-      if (!userDoc.exists) return;
 
+      if (userQuery.docs.isEmpty) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final userDoc = userQuery.docs.first;
       final data = userDoc.data();
-      if (data == null) return;
-
-      // 사용자의 태그 목록 가져오기
+      final userDocId = userDoc.id;
       final userTags = (data.containsKey('tags') && data['tags'] is List)
           ? List<String>.from(data['tags'])
           : <String>[];
 
-      // '특별팀'으로 지정된 모든 태그 이름 가져오기
       final specialTagsQuery = await FirebaseFirestore.instance
           .collection('tags')
           .where('isSpecialTeam', isEqualTo: true)
@@ -74,26 +82,28 @@ class _MainRootScreenState extends State<MainRootScreen> {
       final specialTeamNames =
           specialTagsQuery.docs.map((doc) => doc.data()['name'] as String).toSet();
 
-      // 사용자가 특별팀 태그를 가지고 있는지 확인
       final userTagSet = userTags.toSet();
       final hasTag = userTagSet.intersection(specialTeamNames).isNotEmpty;
 
       if (mounted) {
         setState(() {
+          _userDocId = userDocId;
           _permissionLevel = (data['permissionLevel'] ?? 4) as int;
           _userTags = userTags;
           _hasSpecialTeamTag = hasTag;
+          _isLoading = false;
         });
       }
     } catch (_) {
-      // 에러는 조용히 무시
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _openAdminPage() {
     if (_phoneNumber == null) return;
     if (_permissionLevel > 2) return;
-
+    
+    // ThemeProvider 관련 코드 제거
     Navigator.pushNamed(
       context,
       '/adminRoot',
@@ -104,7 +114,6 @@ class _MainRootScreenState extends State<MainRootScreen> {
     );
   }
 
-  // SpecialTeamsScreen으로 이동 시 사용자 정보 전달
   void _openSpecialTeamsPage() {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => SpecialTeamsScreen(
@@ -116,10 +125,7 @@ class _MainRootScreenState extends State<MainRootScreen> {
 
   List<Widget> _buildActions() {
     final actions = <Widget>[];
-
-    // 권한 레벨 0 또는 특별팀 태그가 있는 경우 아이콘 표시
     final bool hasSpecialRole = _permissionLevel == 0 || _hasSpecialTeamTag;
-
     if (hasSpecialRole) {
       actions.add(
         IconButton(
@@ -128,7 +134,6 @@ class _MainRootScreenState extends State<MainRootScreen> {
         ),
       );
     }
-
     if (_permissionLevel <= 2) {
       actions.add(
         IconButton(
@@ -137,35 +142,30 @@ class _MainRootScreenState extends State<MainRootScreen> {
         ),
       );
     }
-
     return actions;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_phoneNumber == null) {
+    if (_isLoading || _phoneNumber == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // 권한에 따라 페이지 목록 구성
     final List<Widget> pages = [
       HomeTabScreen(
         phoneNumber: _phoneNumber!,
         permissionLevel: _permissionLevel,
         isPending: _permissionLevel >= 4,
       ),
-      // 권한 레벨 3 (리더)는 소그룹 관리 탭 표시
       if (_permissionLevel == 3)
         GroupManagementTabScreen(leaderPhoneNumber: _phoneNumber!),
-      // 권한 레벨 2 이하 (관리자)는 함께 기도 탭 표시
       if (_permissionLevel <= 2)
         SharingTabScreen(
           currentUserPhoneNumber: _phoneNumber!,
           currentUserPermissionLevel: _permissionLevel,
         ),
-      // 권한 레벨 3 이하는 기도 탭 표시
       if (_permissionLevel <= 3)
         PrayerTabScreen(
           phoneNumber: _phoneNumber!,
@@ -181,12 +181,12 @@ class _MainRootScreenState extends State<MainRootScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('갈보리청년'),
+        title: const Text(''),
         actions: _buildActions(),
       ),
       body: PageView(
         controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(), // Prevent manual swipe
+        physics: const NeverScrollableScrollPhysics(),
         children: pages,
       ),
       extendBody: true,
@@ -211,7 +211,6 @@ class _MainRootScreenState extends State<MainRootScreen> {
                     color: theme.bottomNavigationBarTheme.unselectedItemColor),
                 activeItem: ScaleAnimatedIcon(
                     icon: Icons.home, color: colorScheme.onPrimary)),
-            // 권한 3 (리더)는 그룹 아이콘
             if (_permissionLevel == 3)
               BottomBarItem(
                   inActiveItem: Icon(Icons.group,
@@ -219,7 +218,6 @@ class _MainRootScreenState extends State<MainRootScreen> {
                           theme.bottomNavigationBarTheme.unselectedItemColor),
                   activeItem: ScaleAnimatedIcon(
                       icon: Icons.group, color: colorScheme.onPrimary)),
-            // 권한 2 이하 (관리자)는 기존 아이콘
             if (_permissionLevel <= 2)
               BottomBarItem(
                   inActiveItem: Icon(Icons.question_answer,
@@ -228,7 +226,6 @@ class _MainRootScreenState extends State<MainRootScreen> {
                   activeItem: ScaleAnimatedIcon(
                       icon: Icons.question_answer,
                       color: colorScheme.onPrimary)),
-            // 권한 3 이하는 기도 탭 아이콘
             if (_permissionLevel <= 3)
               BottomBarItem(
                   inActiveItem: Icon(Icons.chat_bubble,
