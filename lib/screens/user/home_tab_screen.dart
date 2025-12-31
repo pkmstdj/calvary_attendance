@@ -91,8 +91,9 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Column(
           children: [
+            const SizedBox(height: 10),
             _buildHeader(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 50),
             Expanded(
               child: _selectedDate == null
                   ? const Center(child: Text('주보를 불러오는 중입니다...'))

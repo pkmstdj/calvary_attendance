@@ -39,6 +39,13 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
     return '정보 없음';
   }
 
+  void _showTermsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const TermsViewerDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userQuery = FirebaseFirestore.instance
@@ -150,6 +157,15 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
                       icon: const Icon(Icons.edit),
                       label: const Text('프로필 수정'),
                     ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: _showTermsDialog,
+                      child: const Text(
+                        '개인정보 이용약관 확인',
+                        style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -246,6 +262,81 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class TermsViewerDialog extends StatefulWidget {
+  const TermsViewerDialog({super.key});
+
+  @override
+  State<TermsViewerDialog> createState() => _TermsViewerDialogState();
+}
+
+class _TermsViewerDialogState extends State<TermsViewerDialog> {
+  String? _termsContent;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTerms();
+  }
+
+  Future<void> _fetchTerms() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('check').doc('terms').get();
+      if (doc.exists && doc.data() != null) {
+        if(mounted) {
+           setState(() {
+            _termsContent = doc.data()!['contents'] as String?;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if(mounted) {
+           setState(() {
+            _termsContent = '약관 내용을 불러올 수 없습니다.';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if(mounted) {
+         setState(() {
+          _termsContent = '오류 발생: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('개인정보 이용약관'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                child: Container(
+                  padding: const EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(_termsContent ?? ''),
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('닫기'),
+        ),
+      ],
     );
   }
 }

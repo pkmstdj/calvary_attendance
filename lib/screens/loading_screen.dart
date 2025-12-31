@@ -61,16 +61,23 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.church, size: 80, color: Colors.grey),
-            SizedBox(height: 24),
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('설정을 불러오는 중입니다...'),
+            Image.asset(
+              'assets/images/ycc_logo.png',
+              width: 150, // 적절한 크기로 설정
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.church, size: 80, color: Colors.grey);
+              },
+            ),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('설정을 불러오는 중입니다...'),
           ],
         ),
       ),
