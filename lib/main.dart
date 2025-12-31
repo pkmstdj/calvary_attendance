@@ -66,7 +66,7 @@ class _VersionCheckScreenState extends State<VersionCheckScreen> {
   }
 
   Future<void> _checkVersion() async {
-    const String currentAppVersion = '1.0.1';
+    const String currentAppVersion = '1.0.3';
 
     try {
       final docRef = FirebaseFirestore.instance.collection('check').doc('app');
