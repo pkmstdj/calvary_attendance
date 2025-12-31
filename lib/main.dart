@@ -1,5 +1,6 @@
 import 'package:calvary_attendance/screens/admin/admin_approval_screen.dart';
 import 'package:calvary_attendance/screens/admin/admin_root_screen.dart';
+import 'package:calvary_attendance/screens/admin/admin_user_profile_screen.dart';
 import 'package:calvary_attendance/screens/admin/tag_management_screen.dart';
 import 'package:calvary_attendance/screens/user/create_user_screen.dart';
 import 'package:calvary_attendance/screens/user/edit_profile_screen.dart';
@@ -27,10 +28,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 수정: Provider를 제거하고 MaterialApp을 직접 반환
     return MaterialApp(
       title: '',
-      // 수정: 테마를 앱 내에 직접 정의
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF003A70)),
         useMaterial3: true,
@@ -45,6 +44,7 @@ class MyApp extends StatelessWidget {
         '/adminRoot': (context) => const AdminRootScreen(),
         '/adminApproval': (context) => const AdminApprovalScreen(),
         '/adminTag': (context) => const TagManagementScreen(),
+        '/adminUserProfile': (context) => const AdminUserProfileScreen(),
       },
     );
   }

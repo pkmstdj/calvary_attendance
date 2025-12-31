@@ -1,9 +1,6 @@
-import 'package:carousel_slider/carousel_slider.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:calvary_attendance/widgets/news_card.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
-import './photo_view_screen.dart';
 
 class HomeTabScreen extends StatefulWidget {
   final String phoneNumber;
@@ -22,212 +19,173 @@ class HomeTabScreen extends StatefulWidget {
 }
 
 class _HomeTabScreenState extends State<HomeTabScreen> {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  List<String> _bulletinDates = [];
   String? _selectedDate;
-  Map<String, List<String>> _bulletinImages = {};
-  bool _isLoading = true;
-  int _currentCarouselIndex = 0;
-  final CarouselSliderController _carouselController = CarouselSliderController();
+  List<String> _availableDates = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchBulletins();
+    _fetchAvailableDates();
   }
 
-  Future<void> _fetchBulletins() async {
+  Future<void> _fetchAvailableDates() async {
     try {
-      final ListResult result = await _storage.ref('news').listAll();
-      final allFiles = result.items;
-      Map<String, List<String>> bulletins = {};
-      final RegExp dateRegExp = RegExp(r'news_(\d{6})');
+      final snapshot = await FirebaseFirestore.instance
+          .collection('news')
+          .where('approved', isEqualTo: true)
+          .orderBy('date', descending: true)
+          .get();
 
-      for (var file in allFiles) {
-        final match = dateRegExp.firstMatch(file.name);
-        if (match != null) {
-          final dateStr = match.group(1)!;
-          if (bulletins.containsKey(dateStr)) {
-            bulletins[dateStr]!.add(await file.getDownloadURL());
-          } else {
-            bulletins[dateStr] = [await file.getDownloadURL()];
-          }
+      if (snapshot.docs.isNotEmpty) {
+        var dates = snapshot.docs
+            .map((doc) => doc.data()['date'] as String)
+            .toSet()
+            .toList();
+
+        final now = DateTime.now();
+        final todayStr = '${now.year % 100}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+
+        // 오늘 기준(오늘 포함) 과거 날짜만 필터링
+        dates = dates.where((date) => date.compareTo(todayStr) <= 0).toList();
+
+        // 최대 3개 항목만 표시
+        if (dates.length > 3) {
+          dates = dates.sublist(0, 3);
+        }
+
+        if (mounted) {
+          setState(() {
+            _availableDates = dates;
+            if (_availableDates.isNotEmpty) {
+              // 현재 선택된 날짜가 목록에 없으면(예: 날짜가 바뀌어서 사라짐) 첫번째로 변경
+              if (_selectedDate == null || !_availableDates.contains(_selectedDate)) {
+                _selectedDate = _availableDates.first;
+              }
+            }
+          });
         }
       }
-
-      final today = DateFormat('yyMMdd').format(DateTime.now());
-      
-      final sortedDates = bulletins.keys.toList()
-        .where((date) => date.compareTo(today) <= 0)
-        .toList()
-        ..sort((a, b) => b.compareTo(a));
-
-      if (mounted) {
-        setState(() {
-          _bulletinDates = sortedDates.take(3).toList();
-          _bulletinImages = bulletins;
-          if (_bulletinDates.isNotEmpty) {
-            _selectedDate = _bulletinDates[0];
-          }
-          _isLoading = false;
-        });
-      }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      // Handle error
     }
   }
 
-  String _formatDate(String yymmdd) {
-    if (yymmdd.length != 6) return yymmdd;
+  String _formatDate(String dateYyMmDd) {
+    if (dateYyMmDd.length != 6) {
+      return dateYyMmDd;
+    }
     try {
-      return '20${yymmdd.substring(0, 2)}년 ${yymmdd.substring(2, 4)}월 ${yymmdd.substring(4, 6)}일';
+      final String year = '20${dateYyMmDd.substring(0, 2)}';
+      final String month = dateYyMmDd.substring(2, 4);
+      final String day = dateYyMmDd.substring(4, 6);
+      return '$year년 $month월 $day일';
     } catch (e) {
-      return yymmdd;
+      return dateYyMmDd;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _bulletinDates.isEmpty
-              ? const Center(child: Text('주보가 없습니다.'))
-              : ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  children: [buildBulletinCard()],
-                ),
+    return Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Column(
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _selectedDate == null
+                  ? const Center(child: Text('주보를 불러오는 중입니다...'))
+                  : _buildImageFeed(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget buildBulletinCard() {
-    List<String> images = _bulletinImages[_selectedDate] ?? [];
-
-    return Card(
-      margin: const EdgeInsets.all(16.0),
-      elevation: 4.0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-      child: Column(
-        children: [
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('YCC 주보',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                DropdownButton<String>(
-                  value: _selectedDate,
-                  items: _bulletinDates.map((String date) {
-                    return DropdownMenuItem<String>(
-                      value: date,
-                      child: Text(_formatDate(date)),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedDate = newValue;
-                      _currentCarouselIndex = 0;
-                      if ((_bulletinImages[newValue] ?? []).isNotEmpty) {
-                        _carouselController.jumpToPage(0);
-                      }
-                    });
-                  },
-                ),
-              ],
-            ),
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'YCC 주보',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
           ),
-          if (images.isNotEmpty)
-            Column(
-              children: [
-                CarouselSlider.builder(
-                  carouselController: _carouselController,
-                  itemCount: images.length,
-                  itemBuilder: (context, index, realIndex) {
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PhotoViewScreen(
-                              imageUrls: images,
-                              initialIndex: index,
-                            ),
-                          ),
-                        );
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8.0),
-                        child: Image.network(
-                          images[index],
-                          fit: BoxFit.cover,
-                          loadingBuilder: (BuildContext context, Widget child,
-                              ImageChunkEvent? loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes !=
-                                        null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                  options: CarouselOptions(
-                    height: 400,
-                    viewportFraction: 0.9,
-                    enableInfiniteScroll: false,
-                    enlargeCenterPage: true,
-                    onPageChanged: (index, reason) {
-                      setState(() {
-                        _currentCarouselIndex = index;
-                      });
-                    },
-                  ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: images.asMap().entries.map((entry) {
-                    return GestureDetector(
-                      onTap: () => _carouselController.animateToPage(entry.key),
-                      child: Container(
-                        width: 8.0,
-                        height: 8.0,
-                        margin: const EdgeInsets.symmetric(
-                            vertical: 10.0, horizontal: 4.0),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: (Theme.of(context).brightness ==
-                                  Brightness.dark
-                                  ? Colors.white
-                                  : Colors.black)
-                              .withOpacity(
-                                  _currentCarouselIndex == entry.key ? 0.9 : 0.4),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            )
-          else
-            const SizedBox(
-              height: 400,
-              child: Center(child: Text('이미지를 불러올 수 없습니다.')),
-            ),
-        ],
+        ),
+        if (_availableDates.isNotEmpty) _buildDateDropdown(),
+      ],
+    );
+  }
+
+  Widget _buildDateDropdown() {
+    return DropdownButton<String>(
+      value: _selectedDate,
+      underline: Container(
+        height: 1,
+        color: Colors.grey.shade400,
       ),
+      items: _availableDates.map((String date) {
+        return DropdownMenuItem<String>(
+          value: date,
+          child: Text(_formatDate(date)),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _selectedDate = newValue;
+        });
+      },
+    );
+  }
+
+  Widget _buildImageFeed() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('news')
+          .where('approved', isEqualTo: true)
+          .where('date', isEqualTo: _selectedDate)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: _fetchAvailableDates,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                const Center(child: Text('해당 날짜에 주보가 없습니다.')),
+              ],
+            ),
+          );
+        }
+
+        final newsDocs = snapshot.data!.docs;
+
+        return RefreshIndicator(
+          onRefresh: _fetchAvailableDates,
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: newsDocs.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 24),
+            itemBuilder: (context, index) {
+              final newsData = newsDocs[index].data();
+              final imageUrls = List<String>.from(newsData['imageUrls'] ?? []);
+              
+              return NewsCard(
+                imageUrls: imageUrls,
+                date: _selectedDate,
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

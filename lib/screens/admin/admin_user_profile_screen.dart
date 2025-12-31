@@ -1,16 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:panara_dialogs/panara_dialogs.dart';
+import 'package:intl/intl.dart';
 
+import '../../screens/prayer/prayer_detail_screen.dart';
 import '../../utils/age_utils.dart';
-import '../../utils/department_utils.dart'; // DepartmentCalculator import
+import '../../utils/department_utils.dart';
 import '../../utils/phone_utils.dart';
+import '../../utils/team_utils.dart';
 import '../../utils/user_utils.dart';
 
 class AdminUserProfileArguments {
-  final String targetPhoneNumber; // 프로필 대상의 전화번호
-  final String viewerPhoneNumber; // 현재 보고 있는 관리자의 전화번호
-  final int viewerPermissionLevel; // 현재 보고 있는 관리자의 권한
+  final String targetPhoneNumber;
+  final String viewerPhoneNumber;
+  final int viewerPermissionLevel;
 
   AdminUserProfileArguments({
     required this.targetPhoneNumber,
@@ -27,11 +29,19 @@ class AdminUserProfileScreen extends StatefulWidget {
 }
 
 class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
-  late Future<QuerySnapshot<Map<String, dynamic>>> _userFuture;
+  late Future<DocumentSnapshot<Map<String, dynamic>>> _userFuture;
   late final AdminUserProfileArguments _args;
   bool _initialized = false;
-  // 대상 유저의 문서 ID를 저장할 변수
   String? _targetUserDocId;
+
+  Map<String, String> _smallGroupLeaders = {};
+  final Map<String, String> _leaderNameCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSmallGroupLeaders();
+  }
 
   @override
   void didChangeDependencies() {
@@ -40,41 +50,185 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
       final args = ModalRoute.of(context)!.settings.arguments;
       if (args is AdminUserProfileArguments) {
         _args = args;
-        // 수정: 전화번호로 사용자 쿼리
-        _userFuture = FirebaseFirestore.instance
-            .collection('users')
-            .where('phoneNumber', isEqualTo: _args.targetPhoneNumber)
-            .limit(1)
-            .get();
+        _loadUser();
         _initialized = true;
       }
     }
   }
 
-  // 대상 유저 삭제
-  Future<void> _deleteUser() async {
-    if (_targetUserDocId == null) return;
-    // ... (기존 삭제 로직)
+  void _loadUser() {
+    setState(() {
+      _userFuture = _getUserDocument();
+    });
+  }
+  
+  Future<DocumentSnapshot<Map<String, dynamic>>> _getUserDocument() async {
+     final snapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where('phoneNumber', isEqualTo: _args.targetPhoneNumber)
+            .limit(1)
+            .get();
+      _targetUserDocId = snapshot.docs.first.id;
+      return snapshot.docs.first;
   }
 
-  // 권한 변경
+  Future<void> _fetchSmallGroupLeaders() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('permissionLevel', isEqualTo: 2)
+          .orderBy('name')
+          .get();
+
+      final leaders = <String, String>{};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final name = data['name'] ?? '이름 없음';
+        final classYear = data['classYear'] ?? '??';
+        final phoneNumber = data['phoneNumber'];
+        if (phoneNumber != null) {
+          leaders[phoneNumber] = '$classYear기 $name';
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _smallGroupLeaders = leaders;
+        });
+      }
+    } catch (e) {
+      // 에러 처리
+    }
+  }
+  
+  Future<String> _getLeaderDisplayName(String phoneNumber) async {
+    if (_leaderNameCache.containsKey(phoneNumber)) {
+      return _leaderNameCache[phoneNumber]!;
+    }
+    
+    if (_smallGroupLeaders.containsKey(phoneNumber)) {
+        final name = _smallGroupLeaders[phoneNumber]!;
+        _leaderNameCache[phoneNumber] = name;
+        return name;
+    }
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phoneNumber', isEqualTo: phoneNumber)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final name = data['name'] ?? '이름 없음';
+        final classYear = data['classYear'] ?? '??';
+        final displayName = '$classYear기 $name';
+        _leaderNameCache[phoneNumber] = displayName;
+        return displayName;
+      }
+    } catch (e) {
+      return '정보 없음';
+    }
+    return '정보 없음';
+  }
+
+  Future<void> _deleteUser() async {
+    // 삭제 로직 (필요시 구현)
+  }
+
   Future<void> _changePermission(int newLevel) async {
     if (_targetUserDocId == null) return;
     await FirebaseFirestore.instance
         .collection('users')
-        .doc(_targetUserDocId) // 수정: ID 사용
+        .doc(_targetUserDocId)
         .update({'permissionLevel': newLevel});
-    setState(() {
-      _userFuture = FirebaseFirestore.instance.collection('users')
-          .where('phoneNumber', isEqualTo: _args.targetPhoneNumber).limit(1).get();
-    });
-  }
-  
-  // 태그 수정 (이 함수는 태그 수정 화면으로 이동하는 로직이 필요)
-  void _editTags() {
-    // TODO: 태그 수정 화면 구현 및 docId 전달
+    _loadUser();
   }
 
+  Future<void> _changeSmallGroup(String leaderPhoneNumber) async {
+    if (_targetUserDocId == null) return;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_targetUserDocId)
+        .update({'smallGroupLeaderPhone': leaderPhoneNumber});
+    _loadUser();
+  }
+
+  Future<void> _updateUserTags(List<String> newTags) async {
+    if (_targetUserDocId == null) return;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_targetUserDocId)
+        .update({'tags': newTags});
+    _loadUser();
+  }
+
+  void _showEditTagsDialog(List<String> currentTags) {
+    List<String> selectedTags = List.from(currentTags);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('태그 수정'),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return SingleChildScrollView(
+                child: Wrap(
+                  spacing: 8.0,
+                  children: TeamUtils.allTeams.map((team) {
+                    return FilterChip(
+                      label: Text(team),
+                      selected: selectedTags.contains(team),
+                      onSelected: (isSelected) {
+                        setState(() {
+                          isSelected ? selectedTags.add(team) : selectedTags.remove(team);
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+            TextButton(onPressed: () { _updateUserTags(selectedTags); Navigator.pop(context); }, child: const Text('저장')),
+          ],
+        );
+      },
+    );
+  }
+
+  // ======[여기만 수정]======
+  void _showPrayerDetail(String prayerDocId, String text, String? date, bool isChecked) {
+    // 들어간 사람이 사역자(0)이고, 아직 확인하지 않은 기도제목(isChecked == false)일 경우에만 DB 업데이트
+    if (_args.viewerPermissionLevel == 0 && !isChecked) {
+       if (_targetUserDocId != null) {
+        FirebaseFirestore.instance
+          .collection('users')
+          .doc(_targetUserDocId)
+          .collection('prayerRequests')
+          .doc(prayerDocId)
+          .update({'isChecked': true});
+       }
+    }
+    
+    // 상세 화면으로 이동
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (context) => const PrayerDetailScreen(),
+      settings: RouteSettings(
+        arguments: PrayerDetailScreenArguments(
+          userDocId: _targetUserDocId!,
+          prayerDocId: prayerDocId,
+          text: text,
+          date: date,
+          isOwner: false, // 관리자 화면에서는 항상 false
+        ),
+      ),
+    ));
+  }
+  // ==========================
 
   @override
   Widget build(BuildContext context) {
@@ -82,79 +236,74 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
       return const Scaffold(body: Center(child: Text('잘못된 접근입니다.')));
     }
 
-    return FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       future: _userFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
           return const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.')));
         }
 
-        final userDoc = snapshot.data!.docs.first;
-        // 문서 ID 저장
+        final userDoc = snapshot.data!;
+        final data = userDoc.data()!;
         _targetUserDocId = userDoc.id;
-        final data = userDoc.data();
         
-        // ... (기존 UI 코드)
         final name = (data['name'] ?? '이름 없음').toString();
         final birthDate = data['birthDate'] as String?;
-        // 수정: calculateAge -> calculateInternationalAge
         final age = AgeCalculator.calculateInternationalAge(birthDate);
         final classYear = (data['classYear'] ?? '').toString();
-        // 수정: birthDate로 department를 실시간 계산
         final department = DepartmentCalculator.calculateDepartment(birthDate);
         final formattedPhone = formatPhoneNumber(_args.targetPhoneNumber);
         final permissionLevel = (data['permissionLevel'] ?? 4) as int;
+        final smallGroupLeaderPhone = data['smallGroupLeaderPhone'] as String?;
         final tags = (data['tags'] as List<dynamic>? ?? []).map((tag) => tag.toString()).toList();
 
         final bool canEdit = _args.viewerPermissionLevel < permissionLevel;
         final bool isSelf = _args.viewerPhoneNumber == _args.targetPhoneNumber;
+        final bool canEditTags = _args.viewerPermissionLevel == 0 && permissionLevel > 0;
 
         return Scaffold(
-          appBar: AppBar(
-            title: Text(name),
-            actions: [
-              if (canEdit && !isSelf)
+          appBar: AppBar(title: Text(name), actions: [
+             if (canEdit && !isSelf)
                 PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'delete') {
-                      _deleteUser();
-                    }
-                  },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Text('사용자 삭제'),
+                  onSelected: (value) => (value == 'delete') ? _deleteUser() : null,
+                  itemBuilder: (context) => [const PopupMenuItem(value: 'delete', child: Text('사용자 삭제'))],
+                ),
+          ],),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildInfoCard(title: '기본 정보', details: {
+                      '소속': department, '기수': classYear, '나이': age > 0 ? '$age세' : '정보 없음',
+                      '생년월일': birthDate ?? '정보 없음', '전화번호': formattedPhone,
+                    }),
+                    const SizedBox(height: 24),
+                    if (permissionLevel >= 1 && permissionLevel <= 3) ...[
+                      _buildSmallGroupCard(
+                        leaderPhone: smallGroupLeaderPhone, canEdit: canEdit,
+                        leaders: _smallGroupLeaders, onChanged: (newLeaderPhone) => _changeSmallGroup(newLeaderPhone),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    _buildPermissionCard(
+                      currentLevel: permissionLevel, canEdit: canEdit,
+                      onChanged: (newLevel) => _changePermission(newLevel),
                     ),
+                    const SizedBox(height: 24),
+                    _buildTagsCard(tags: tags, canEdit: canEditTags, onEdit: () => _showEditTagsDialog(tags)),
+                    
+                    if (_args.viewerPermissionLevel == 0 && _targetUserDocId != null) ...[
+                      const SizedBox(height: 24),
+                      _buildPrayerRequestsCard(_targetUserDocId!),
+                    ],
                   ],
                 ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ... (기존 UI 위젯들)
-                  _buildInfoCard(title: '기본 정보', details: {
-                    '소속': department,
-                    '기수': classYear,
-                    '나이': age > 0 ? '$age세' : '정보 없음',
-                    '생년월일': birthDate ?? '정보 없음',
-                    '전화번호': formattedPhone,
-                  }),
-                  const SizedBox(height: 24),
-                  _buildPermissionCard(
-                    currentLevel: permissionLevel,
-                    canEdit: canEdit,
-                    onChanged: (newLevel) => _changePermission(newLevel),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildTagsCard(tags: tags, canEdit: canEdit, onEdit: _editTags),
-                ],
               ),
             ),
           ),
@@ -163,9 +312,7 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
     );
   }
 
-  // ... (_buildInfoCard, _buildPermissionCard, _buildTagsCard 헬퍼 메서드는 변경 없음)
-  Widget _buildInfoCard(
-      {required String title, required Map<String, String> details}) {
+  Widget _buildInfoCard({required String title, required Map<String, String> details}) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -206,10 +353,58 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
                     onSelected: onChanged,
                     itemBuilder: (context) => [
                       const PopupMenuItem(value: 0, child: Text('사역자')),
-                      const PopupMenuItem(value: 1, child: Text('팀장')),
+                      const PopupMenuItem(value: 1, child: Text('청장')),
                       const PopupMenuItem(value: 2, child: Text('리더')),
                       const PopupMenuItem(value: 3, child: Text('청년')),
                     ],
+                  )
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildSmallGroupCard({
+    String? leaderPhone,
+    required bool canEdit,
+    required Map<String, String> leaders,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('소그룹', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (leaderPhone == null || leaderPhone.isEmpty)
+                  const Text('소속 없음')
+                else
+                  FutureBuilder<String>(
+                    future: _getLeaderDisplayName(leaderPhone),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.0));
+                      }
+                      return Expanded(child: Text(snapshot.data ?? '정보 없음', overflow: TextOverflow.ellipsis));
+                    },
+                  ),
+                if (canEdit)
+                  PopupMenuButton<String>(
+                    child: const Icon(Icons.edit),
+                    onSelected: onChanged,
+                    itemBuilder: (context) => leaders.entries.map((entry) {
+                      return PopupMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      );
+                    }).toList(),
                   )
               ],
             )
@@ -229,17 +424,88 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
              Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('태그', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('태그 (특별팀)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 if (canEdit)
-                  IconButton(icon: const Icon(Icons.edit), onPressed: onEdit)
+                  IconButton(icon: const Icon(Icons.edit), onPressed: onEdit, tooltip: '태그 수정',)
               ],
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8.0,
               runSpacing: 4.0,
-              children: tags.map((tag) => Chip(label: Text(tag))).toList(),
+              children: tags.isNotEmpty 
+                ? tags.map((tag) => Chip(label: Text(tag))).toList()
+                : [const Text('지정된 태그가 없습니다.')],
             )
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // ======[여기만 수정]======
+  Widget _buildPrayerRequestsCard(String userId) {
+    final stream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('prayerRequests')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('기도제목', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Divider(height: 24),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: stream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Text('작성된 기도제목이 없습니다.');
+                }
+                
+                final requests = snapshot.data!.docs;
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: requests.length,
+                  itemBuilder: (context, index) {
+                    final requestDoc = requests[index];
+                    final data = requestDoc.data();
+                    final text = data['text'] as String? ?? '내용 없음';
+                    final isChecked = data['isChecked'] as bool? ?? false;
+                    final timestamp = data['createdAt'] as Timestamp?;
+                    final dateString = timestamp != null
+                        ? DateFormat('yyyy-MM-dd HH:mm').format(timestamp.toDate())
+                        : null;
+
+                    return ListTile(
+                      leading: Icon(
+                        isChecked ? Icons.check_circle : Icons.circle_outlined,
+                        color: isChecked ? Colors.green : Colors.grey,
+                      ),
+                      title: Text(
+                        text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          decoration: isChecked ? TextDecoration.lineThrough : null,
+                          color: isChecked ? Colors.grey : null,
+                        ),
+                      ),
+                      onTap: () => _showPrayerDetail(requestDoc.id, text, dateString, isChecked),
+                    );
+                  },
+                );
+              },
+            ),
           ],
         ),
       ),

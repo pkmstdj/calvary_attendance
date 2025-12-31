@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // SystemNavigator.pop()을 위해 임포트
 import 'package:intl/intl.dart';
@@ -51,14 +52,43 @@ class _NfcCheckInScreenState extends State<NfcCheckInScreen> {
       }
       debugPrint("[NfcCheckIn] SharedPreferences에서 찾은 전화번호: $userPhone");
 
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userPhone).get();
+      // 수정된 부분: 문서 ID 대신 phoneNumber 필드로 사용자 검색
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phoneNumber', isEqualTo: userPhone)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        debugPrint("[NfcCheckIn] 미등록 사용자 (전화번호 불일치)");
+        return CheckInResult(CheckInStatus.notRegistered, "등록되지 않은 사용자입니다. 회원가입을 먼저 진행해주세요.");
+      }
+
+      final userDoc = userQuery.docs.first;
       final userData = userDoc.data();
 
-      if (!userDoc.exists || userData == null || userData['permissionLevel'] == null) {
+      if (userData['permissionLevel'] == null) {
         debugPrint("[NfcCheckIn] 미승인 사용자");
         return CheckInResult(CheckInStatus.notApproved, "아직 승인되지 않은 사용자입니다.\n관리자의 승인을 기다리거나, 회원가입을 완료해주세요.");
       }
       debugPrint("[NfcCheckIn] Firestore에서 가져온 사용자 데이터: $userData");
+
+      // 사용자 ID 결정 (문서 ID가 Auth UID가 아닐 수 있으므로 로직 수정)
+      // 1. Auth UID 우선
+      // 2. 문서 ID (회원가입 방식에 따라 문서 ID가 UID일 수 있음)
+      // 3. uid 필드 (레거시 데이터 지원)
+      // 4. 전화번호 (최후의 수단, 하지만 중복 방지에는 취약할 수 있음)
+      
+      String userId = userDoc.id; // 기본적으로 문서 ID 사용
+      
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        userId = currentUser.uid;
+      } else if (userData.containsKey('uid') && userData['uid'] != null) {
+        userId = userData['uid'] as String;
+      }
+
+      debugPrint("[NfcCheckIn] 식별된 User ID: $userId");
 
       final now = DateTime.now();
       final year = DateFormat('yyyy').format(now);
@@ -69,7 +99,7 @@ class _NfcCheckInScreenState extends State<NfcCheckInScreen> {
           .collection('attendance')
           .doc(year)
           .collection(monthDay)
-          .doc(userPhone);
+          .doc(userId);
 
       final attendanceDoc = await attendanceDocRef.get();
 
@@ -91,6 +121,7 @@ class _NfcCheckInScreenState extends State<NfcCheckInScreen> {
         'timestamp': Timestamp.fromDate(now),
         'userName': userData['name'] ?? '이름 없음',
         'userPhone': userPhone,
+        'userId': userId,
         'department': finalDepartment,
         'classYear': classYear,
       });

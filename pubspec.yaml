@@ -37,6 +37,7 @@ dependencies:
   animated_notch_bottom_bar: ^1.0.3
   elegant_notification: ^2.1.0
   rflutter_alert: ^2.0.7
+  cached_network_image: ^3.3.1 # 이미지 캐시 패키지 추가
 
   # NFC & Deep Link (uni_links to app_links migration)
   nfc_manager: ^4.0.0

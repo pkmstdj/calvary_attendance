@@ -45,7 +45,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
               right: 0,
               child: AppBar(
                 title: Text(widget.title),
-                backgroundColor: Colors.black.withOpacity(0.5),
+                backgroundColor: Colors.white.withOpacity(0.8),
                 elevation: 0,
               ),
             ),

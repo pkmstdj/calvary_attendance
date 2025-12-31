@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'admin_admin_tab.dart';
 import 'admin_main_tab.dart';
-import 'admin_prayer_tab.dart';
+import 'admin_sharing_tab_screen.dart'; // AdminSharingTabScreen 임포트
 import 'admin_student_tab.dart';
 import '../user/main_root_screen.dart'; // For ScaleAnimatedIcon
 
@@ -42,18 +42,19 @@ class _AdminRootScreenState extends State<AdminRootScreen> {
         _initialized = true;
 
         _tabs = [
+          // 1. 전체 명단
+          AdminStudentTab(
+            viewerPhoneNumber: _args.phoneNumber,
+            viewerPermissionLevel: _args.permissionLevel,
+          ),
+          // 2. 주보 확인
           AdminMainTab(
             phoneNumber: _args.phoneNumber,
             permissionLevel: _args.permissionLevel,
           ),
-          AdminStudentTab(
-            phoneNumber: _args.phoneNumber,
-            permissionLevel: _args.permissionLevel,
-          ),
-          AdminPrayerTab(
-            phoneNumber: _args.phoneNumber,
-            permissionLevel: _args.permissionLevel,
-          ),
+          // 3. 나눔 질문 확인
+          const AdminSharingTabScreen(),
+          // 4. 관리자 승인 (권한 체크)
           if (_args.permissionLevel <= 1)
             AdminAdminTab(
               phoneNumber: _args.phoneNumber,
@@ -66,7 +67,6 @@ class _AdminRootScreenState extends State<AdminRootScreen> {
 
   @override
   void dispose() {
-    // ThemeProvider 관련 코드 제거
     _pageController.dispose();
     super.dispose();
   }
@@ -103,9 +103,22 @@ class _AdminRootScreenState extends State<AdminRootScreen> {
           showLabel: false,
           durationInMilliSeconds: 250,
           bottomBarItems: [
-            BottomBarItem(inActiveItem: Icon(Icons.home, color: theme.bottomNavigationBarTheme.unselectedItemColor), activeItem: ScaleAnimatedIcon(icon: Icons.home, color: colorScheme.onPrimary)),
-            BottomBarItem(inActiveItem: Icon(Icons.people, color: theme.bottomNavigationBarTheme.unselectedItemColor), activeItem: ScaleAnimatedIcon(icon: Icons.people, color: colorScheme.onPrimary)),
-            BottomBarItem(inActiveItem: Icon(Icons.chat_bubble, color: theme.bottomNavigationBarTheme.unselectedItemColor), activeItem: ScaleAnimatedIcon(icon: Icons.chat_bubble, color: colorScheme.onPrimary)),
+            // 1. 전체 명단 아이콘
+            BottomBarItem(
+              inActiveItem: Icon(Icons.people, color: theme.bottomNavigationBarTheme.unselectedItemColor), 
+              activeItem: ScaleAnimatedIcon(icon: Icons.people, color: colorScheme.onPrimary)
+            ),
+            // 2. 주보 확인 아이콘
+            BottomBarItem(
+              inActiveItem: Icon(Icons.plagiarism_outlined, color: theme.bottomNavigationBarTheme.unselectedItemColor),
+              activeItem: ScaleAnimatedIcon(icon: Icons.plagiarism, color: colorScheme.onPrimary),
+            ),
+            // 3. 나눔 질문 확인 아이콘
+            BottomBarItem(
+              inActiveItem: Icon(Icons.share, color: theme.bottomNavigationBarTheme.unselectedItemColor),
+              activeItem: ScaleAnimatedIcon(icon: Icons.share, color: colorScheme.onPrimary),
+            ),
+            // 4. 관리자 승인 아이콘
             if (isSuperAdmin)
               BottomBarItem(
                 inActiveItem: Icon(Icons.admin_panel_settings, color: theme.bottomNavigationBarTheme.unselectedItemColor),

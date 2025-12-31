@@ -29,12 +29,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
     final savedPhoneNumber = prefs.getString('savedPhoneNumber');
 
     if (savedPhoneNumber != null && savedPhoneNumber.isNotEmpty) {
-      // 수정: doc(phoneNumber).get() -> where('phoneNumber', ...).get()
       final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('phoneNumber', isEqualTo: savedPhoneNumber)
           .limit(1)
           .get();
+
+      if (!mounted) return;
 
       if (querySnapshot.docs.isNotEmpty) {
         // 계정이 존재하면 메인 화면으로 이동
