@@ -44,6 +44,9 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
     final phoneNumber = '+8210${_phoneController.text}'; 
 
     try {
+      // 한국어 문자 메시지 발송 설정
+      await FirebaseAuth.instance.setLanguageCode('ko');
+
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         verificationCompleted: (PhoneAuthCredential credential) async {
