@@ -254,16 +254,16 @@ class _MainRootScreenState extends State<MainRootScreen> {
         inActiveItem: Icon(Icons.groups, color: unselectedColor),
         activeItem: ScaleAnimatedIcon(icon: Icons.groups, color: selectedColor),
       ));
-    } else if (_permissionLevel <= 1) { // 청장, 사역자
-      pages.add(SharingTabScreen(
-        currentUserPhoneNumber: _phoneNumber!,
-        currentUserPermissionLevel: _permissionLevel,
-      ));
-      bottomBarItems.add(BottomBarItem(
-        inActiveItem: Icon(Icons.share, color: unselectedColor),
-        activeItem: ScaleAnimatedIcon(icon: Icons.share, color: selectedColor),
-      ));
     }
+
+    pages.add(SharingTabScreen(
+      currentUserPhoneNumber: _phoneNumber!,
+      currentUserPermissionLevel: _permissionLevel,
+    ));
+    bottomBarItems.add(BottomBarItem(
+      inActiveItem: Icon(Icons.share, color: unselectedColor),
+      activeItem: ScaleAnimatedIcon(icon: Icons.share, color: selectedColor),
+    ));
 
     // 3. 기도제목 (수정: 등급 1, 2, 3 에게만 보임)
     if (_permissionLevel >= 1 && _permissionLevel <= 3) {

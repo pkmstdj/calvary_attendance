@@ -54,38 +54,39 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
         .limit(1);
 
     return Scaffold(
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      body: SafeArea(
+        child:StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: userQuery.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-             return RefreshIndicator(
-               onRefresh: () async {
-                 setState(() {});
-               },
-               child: SingleChildScrollView(
-                 physics: const AlwaysScrollableScrollPhysics(),
-                 child: SizedBox(
-                     height: MediaQuery.of(context).size.height * 0.8,
-                     child: Center(child: Text('정보를 불러오는 중 오류가 발생했습니다: ${snapshot.error}'))
-                 ),
-               ),
-             );
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(() {});
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.8,
+                    child: Center(child: Text('정보를 불러오는 중 오류가 발생했습니다: ${snapshot.error}'))
+                ),
+              ),
+            );
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return RefreshIndicator(
               onRefresh: () async {
                 setState(() {});
               },
-               child: SingleChildScrollView(
-                 physics: const AlwaysScrollableScrollPhysics(),
-                 child: SizedBox(
-                     height: MediaQuery.of(context).size.height * 0.8,
-                     child: const Center(child: Text('사용자 정보를 찾을 수 없습니다.'))
-                 ),
-               ),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.8,
+                    child: const Center(child: Text('사용자 정보를 찾을 수 없습니다.'))
+                ),
+              ),
             );
           }
 
@@ -173,6 +174,8 @@ class _ProfileTabScreenState extends State<ProfileTabScreen> {
           );
         },
       ),
+      ),
+
     );
   }
 

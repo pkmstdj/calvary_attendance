@@ -46,14 +46,7 @@ class _SharingTabScreenState extends State<SharingTabScreen> {
   }
 
   Future<void> _fetchUserId() async {
-    // 1. Auth UID 우선
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      _currentUserId = currentUser.uid;
-      return;
-    }
-
-    // 2. Auth 정보가 없으면 phoneNumber로 조회
+    // Auth UID 사용 로직 제거. 무조건 phoneNumber로 매칭되는 문서를 찾음.
     if (widget.currentUserPhoneNumber != null) {
       try {
         final snapshot = await FirebaseFirestore.instance
@@ -63,13 +56,10 @@ class _SharingTabScreenState extends State<SharingTabScreen> {
             .get();
         
         if (snapshot.docs.isNotEmpty) {
-          final data = snapshot.docs.first.data();
-          // 문서 내에 uid 필드가 있으면 사용, 없으면 문서 ID 사용 (문서 ID가 전화번호일 수도 있음)
-          if (data.containsKey('uid') && data['uid'] != null) {
-            _currentUserId = data['uid'] as String;
-          } else {
-             _currentUserId = snapshot.docs.first.id;
-          }
+          // 전화번호가 일치하는 문서의 ID를 사용 (이것이 내 계정 문서)
+          _currentUserId = snapshot.docs.first.id;
+        } else {
+          debugPrint('User not found with phone number: ${widget.currentUserPhoneNumber}');
         }
       } catch (e) {
         debugPrint('Error fetching user ID: $e');
@@ -196,6 +186,11 @@ class _SharingTabScreenState extends State<SharingTabScreen> {
   }
 
   Future<void> _saveAnswer(int index, String text) async {
+    // _currentUserId가 없는 경우 재시도 (혹시 초기화 늦어질 경우 대비)
+    if (_currentUserId == null) {
+      await _fetchUserId();
+    }
+    
     if (_currentUserId == null || _selectedDate == null) return;
 
     try {
@@ -216,7 +211,7 @@ class _SharingTabScreenState extends State<SharingTabScreen> {
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
       
-      debugPrint('DB Answer $index saved for $_selectedDate');
+      debugPrint('DB Answer $index saved for $_selectedDate at users/$_currentUserId/sharingAnswers/$_selectedDate');
     } catch (e) {
       debugPrint('Error saving answer to DB (Local saved): $e');
       // DB 저장이 실패해도 로컬에는 저장되었으므로 사용자는 데이터를 잃지 않음

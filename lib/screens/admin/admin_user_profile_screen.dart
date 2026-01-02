@@ -63,13 +63,19 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
   }
   
   Future<DocumentSnapshot<Map<String, dynamic>>> _getUserDocument() async {
+     if (_targetUserDocId != null) {
+       return FirebaseFirestore.instance.collection('users').doc(_targetUserDocId).get();
+     }
      final snapshot = await FirebaseFirestore.instance
             .collection('users')
             .where('phoneNumber', isEqualTo: _args.targetPhoneNumber)
             .limit(1)
             .get();
-      _targetUserDocId = snapshot.docs.first.id;
-      return snapshot.docs.first;
+      if (snapshot.docs.isNotEmpty) {
+        _targetUserDocId = snapshot.docs.first.id;
+        return snapshot.docs.first;
+      }
+      throw Exception('User not found');
   }
 
   Future<void> _fetchSmallGroupLeaders() async {
@@ -131,6 +137,80 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
       return '정보 없음';
     }
     return '정보 없음';
+  }
+
+  Future<void> _updateBirthDate(String newDate) async {
+    if (_targetUserDocId == null) return;
+    
+    // 기수 자동 계산
+    final newClassYear = AgeCalculator.calculateClassYear(newDate);
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_targetUserDocId)
+        .update({
+          'birthDate': newDate,
+          'classYear': newClassYear,
+        });
+    _loadUser();
+  }
+
+  Future<void> _updatePhoneNumber(String newPhone) async {
+    if (_targetUserDocId == null) return;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_targetUserDocId)
+        .update({'phoneNumber': newPhone});
+    _loadUser();
+  }
+
+  Future<void> _showEditBirthDateDialog(String? currentBirthDate) async {
+    DateTime initialDate = DateTime.now();
+    if (currentBirthDate != null && currentBirthDate.isNotEmpty) {
+      try {
+        initialDate = DateTime.parse(currentBirthDate);
+      } catch (_) {}
+    }
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+       final String formatted = DateFormat('yyyy-MM-dd').format(picked);
+       _updateBirthDate(formatted);
+    }
+  }
+
+  Future<void> _showEditPhoneNumberDialog(String currentPhoneNumber) async {
+    final controller = TextEditingController(text: currentPhoneNumber);
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('전화번호 수정'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: '전화번호 (- 없이 입력)'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+            TextButton(
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  _updatePhoneNumber(controller.text.trim());
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _deleteUser() async {
@@ -200,9 +280,7 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
     );
   }
 
-  // ======[여기만 수정]======
   void _showPrayerDetail(String prayerDocId, String text, String? date, bool isChecked) {
-    // 들어간 사람이 사역자(0)이고, 아직 확인하지 않은 기도제목(isChecked == false)일 경우에만 DB 업데이트
     if (_args.viewerPermissionLevel == 0 && !isChecked) {
        if (_targetUserDocId != null) {
         FirebaseFirestore.instance
@@ -214,7 +292,6 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
        }
     }
     
-    // 상세 화면으로 이동
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => const PrayerDetailScreen(),
       settings: RouteSettings(
@@ -223,12 +300,11 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
           prayerDocId: prayerDocId,
           text: text,
           date: date,
-          isOwner: false, // 관리자 화면에서는 항상 false
+          isOwner: false, 
         ),
       ),
     ));
   }
-  // ==========================
 
   @override
   Widget build(BuildContext context) {
@@ -255,18 +331,23 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
         final age = AgeCalculator.calculateInternationalAge(birthDate);
         final classYear = (data['classYear'] ?? '').toString();
         final department = DepartmentCalculator.calculateDepartment(birthDate);
-        final formattedPhone = formatPhoneNumber(_args.targetPhoneNumber);
+        
+        final rawPhoneNumber = data['phoneNumber'] as String? ?? _args.targetPhoneNumber;
+        final formattedPhone = formatPhoneNumber(rawPhoneNumber);
+        
         final permissionLevel = (data['permissionLevel'] ?? 4) as int;
         final smallGroupLeaderPhone = data['smallGroupLeaderPhone'] as String?;
         final tags = (data['tags'] as List<dynamic>? ?? []).map((tag) => tag.toString()).toList();
 
-        final bool canEdit = _args.viewerPermissionLevel < permissionLevel;
-        final bool isSelf = _args.viewerPhoneNumber == _args.targetPhoneNumber;
-        final bool canEditTags = _args.viewerPermissionLevel == 0 && permissionLevel > 0;
+        final bool canEditLevel = _args.viewerPermissionLevel < 1;
+        final bool canEditGroup = _args.viewerPermissionLevel < 3;
+        final bool isSelf = _args.viewerPhoneNumber == rawPhoneNumber;
+        final bool isAdmin = _args.viewerPermissionLevel < 1 && permissionLevel > 0;
+        final bool canEditBasicInfo = _args.viewerPermissionLevel == 0;
 
         return Scaffold(
           appBar: AppBar(title: Text(name), actions: [
-             if (canEdit && !isSelf)
+             if (isAdmin && !isSelf)
                 PopupMenuButton<String>(
                   onSelected: (value) => (value == 'delete') ? _deleteUser() : null,
                   itemBuilder: (context) => [const PopupMenuItem(value: 'delete', child: Text('사용자 삭제'))],
@@ -279,24 +360,31 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildInfoCard(title: '기본 정보', details: {
-                      '소속': department, '기수': classYear, '나이': age > 0 ? '$age세' : '정보 없음',
-                      '생년월일': birthDate ?? '정보 없음', '전화번호': formattedPhone,
-                    }),
+                    _buildInfoCard(
+                      title: '기본 정보', 
+                      details: {
+                        '소속': department, '기수': classYear, '나이': age > 0 ? '$age세' : '정보 없음',
+                        '생년월일': birthDate ?? '정보 없음', '전화번호': formattedPhone,
+                      },
+                      editActions: canEditBasicInfo ? {
+                        '생년월일': () => _showEditBirthDateDialog(birthDate),
+                        '전화번호': () => _showEditPhoneNumberDialog(rawPhoneNumber),
+                      } : null,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildPermissionCard(
+                      currentLevel: permissionLevel, canEdit: canEditLevel,
+                      onChanged: (newLevel) => _changePermission(newLevel),
+                    ),
                     const SizedBox(height: 24),
                     if (permissionLevel >= 1 && permissionLevel <= 3) ...[
                       _buildSmallGroupCard(
-                        leaderPhone: smallGroupLeaderPhone, canEdit: canEdit,
+                        leaderPhone: smallGroupLeaderPhone, canEdit: canEditGroup,
                         leaders: _smallGroupLeaders, onChanged: (newLeaderPhone) => _changeSmallGroup(newLeaderPhone),
                       ),
                       const SizedBox(height: 24),
                     ],
-                    _buildPermissionCard(
-                      currentLevel: permissionLevel, canEdit: canEdit,
-                      onChanged: (newLevel) => _changePermission(newLevel),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildTagsCard(tags: tags, canEdit: canEditTags, onEdit: () => _showEditTagsDialog(tags)),
+                    _buildTagsCard(tags: tags, canEdit: isAdmin, onEdit: () => _showEditTagsDialog(tags)),
                     
                     if (_args.viewerPermissionLevel == 0 && _targetUserDocId != null) ...[
                       const SizedBox(height: 24),
@@ -312,7 +400,11 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
     );
   }
 
-  Widget _buildInfoCard({required String title, required Map<String, String> details}) {
+  Widget _buildInfoCard({
+    required String title, 
+    required Map<String, String> details,
+    Map<String, VoidCallback>? editActions,
+  }) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -321,13 +413,30 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
           children: [
             Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Divider(height: 24),
-            ...details.entries.map((e) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [Text(e.key, style: const TextStyle(color: Colors.grey)), Text(e.value)],
-              ),
-            ))
+            ...details.entries.map((e) {
+              final action = editActions?[e.key];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(e.key, style: const TextStyle(color: Colors.grey)), 
+                    Row(
+                      children: [
+                        Text(e.value),
+                        if (action != null) ...[
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: action,
+                            child: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                          )
+                        ]
+                      ],
+                    )
+                  ],
+                ),
+              );
+            })
           ],
         ),
       ),
@@ -443,7 +552,6 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
     );
   }
   
-  // ======[여기만 수정]======
   Widget _buildPrayerRequestsCard(String userId) {
     final stream = FirebaseFirestore.instance
         .collection('users')
