@@ -170,12 +170,12 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('태그 수정'),
+          title: const Text('사역팀 수정'),
           content: StatefulBuilder(
             builder: (BuildContext context, StateSetter setState) {
               return SingleChildScrollView(
                 child: Wrap(
-                  spacing: 8.0,
+                  spacing: 6.0,
                   children: TeamUtils.allTeams.map((team) {
                     return FilterChip(
                       label: Text(team),
@@ -341,7 +341,7 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('권한', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('등급', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -352,7 +352,7 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
                     child: const Icon(Icons.edit),
                     onSelected: onChanged,
                     itemBuilder: (context) => [
-                      const PopupMenuItem(value: 0, child: Text('사역자')),
+                      // const PopupMenuItem(value: 0, child: Text('사역자')),
                       const PopupMenuItem(value: 1, child: Text('청장')),
                       const PopupMenuItem(value: 2, child: Text('리더')),
                       const PopupMenuItem(value: 3, child: Text('청년')),
@@ -424,9 +424,9 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
              Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('태그 (특별팀)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('사역팀', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 if (canEdit)
-                  IconButton(icon: const Icon(Icons.edit), onPressed: onEdit, tooltip: '태그 수정',)
+                  IconButton(icon: const Icon(Icons.edit), onPressed: onEdit, tooltip: '사역팀 수정',)
               ],
             ),
             const SizedBox(height: 8),
@@ -435,7 +435,7 @@ class _AdminUserProfileScreenState extends State<AdminUserProfileScreen> {
               runSpacing: 4.0,
               children: tags.isNotEmpty 
                 ? tags.map((tag) => Chip(label: Text(tag))).toList()
-                : [const Text('지정된 태그가 없습니다.')],
+                : [const Text('사역팀이 없습니다.')],
             )
           ],
         ),

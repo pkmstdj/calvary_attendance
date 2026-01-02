@@ -109,7 +109,7 @@ class _AdminSharingTabScreenState extends State<AdminSharingTabScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('나눔 질문 확인'),
+        title: const Text('나눔 질문 관리'),
       ),
       body: SafeArea(
         child: Column(

@@ -91,9 +91,9 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Column(
           children: [
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildHeader(),
-            const SizedBox(height: 50),
+            const SizedBox(height: 33),
             Expanded(
               child: _selectedDate == null
                   ? const Center(child: Text('주보를 불러오는 중입니다...'))
@@ -110,7 +110,7 @@ class _HomeTabScreenState extends State<HomeTabScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         const Text(
-          'YCC 주보',
+          '',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,

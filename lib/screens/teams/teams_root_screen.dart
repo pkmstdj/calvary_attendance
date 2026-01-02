@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../utils/team_utils.dart';
 import 'choir_team_tab.dart';
 import 'education_team_tab.dart';
+import 'executive_team_tab.dart';
 import 'guidance_support_team_tab.dart';
 import 'media_team_tab.dart';
 import 'missions_team_tab.dart';
@@ -46,6 +47,8 @@ class _TeamsRootScreenState extends State<TeamsRootScreen>
 
   Widget _getTeamScreen(String teamName) {
     switch (teamName) {
+      case '임원':
+        return const ExecutiveTeamTab();
       case '안내&지원팀':
         return const GuidanceSupportTeamTab();
       case '선교팀':

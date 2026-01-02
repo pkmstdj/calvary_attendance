@@ -90,7 +90,7 @@ class _AdminMainTabState extends State<AdminMainTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('관리자 메인'),
+        title: const Text('주보 관리'),
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0),

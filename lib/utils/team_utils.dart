@@ -3,6 +3,7 @@ class TeamUtils {
   /// 앱에 존재하는 모든 특별팀의 목록
   /// 여기에 팀 이름을 추가하면 태그 수정 시 선택 항목에 자동으로 나타납니다.
   static const List<String> allTeams = [
+    '임원',
     '안내&지원팀',
     '선교팀',
     '교육훈련팀',

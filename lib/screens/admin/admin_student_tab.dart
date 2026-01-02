@@ -167,7 +167,7 @@ class _AdminStudentTabState extends State<AdminStudentTab> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      body: SafeArea(child: RefreshIndicator(
         onRefresh: _loadAllUsers,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(), // 스크롤 내용이 적어도 리프레시 가능하도록 설정
@@ -200,67 +200,69 @@ class _AdminStudentTabState extends State<AdminStudentTab> {
             ),
             _foundUsers.isNotEmpty
                 ? SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final user = _foundUsers[index];
-                        final data = user.data() as Map<String, dynamic>;
-                        final name = data['name'] ?? '이름 없음';
-                        final classYear = data['classYear'] ?? '??';
-                        final permissionLevel = data['permissionLevel'] ?? 4;
-                        final permissionLabel = getPermissionLabel(permissionLevel);
-                        final tags = (data['tags'] as List<dynamic>? ?? []).map((t) => t.toString()).toList();
-  
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          child: ListTile(
-                            title: Text(name),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('$classYear기 / $permissionLabel'),
-                                if (tags.isNotEmpty)
-                                  Wrap(
-                                    spacing: 4.0,
-                                    runSpacing: 2.0,
-                                    children: tags.map((tag) => Chip(
-                                      label: Text(tag, style: const TextStyle(fontSize: 10)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                                      visualDensity: VisualDensity.compact,
-                                    )).toList(),
-                                  )
-                              ],
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final user = _foundUsers[index];
+                  final data = user.data() as Map<String, dynamic>;
+                  final name = data['name'] ?? '이름 없음';
+                  final classYear = data['classYear'] ?? '??';
+                  final permissionLevel = data['permissionLevel'] ?? 4;
+                  final permissionLabel = getPermissionLabel(permissionLevel);
+                  final tags = (data['tags'] as List<dynamic>? ?? []).map((t) => t.toString()).toList();
+
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: ListTile(
+                      title: Text(name),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$classYear기 / $permissionLabel'),
+                          if (tags.isNotEmpty)
+                            Wrap(
+                              spacing: 4.0,
+                              runSpacing: 2.0,
+                              children: tags.map((tag) => Chip(
+                                label: Text(tag, style: const TextStyle(fontSize: 10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                visualDensity: VisualDensity.compact,
+                              )).toList(),
+                            )
+                        ],
+                      ),
+                      onTap: () {
+                        final targetPhoneNumber = data['phoneNumber'];
+                        if (targetPhoneNumber != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AdminUserProfileScreen(),
+                              settings: RouteSettings(
+                                arguments: AdminUserProfileArguments(
+                                  targetPhoneNumber: targetPhoneNumber,
+                                  viewerPhoneNumber: widget.viewerPhoneNumber,
+                                  viewerPermissionLevel: widget.viewerPermissionLevel,
+                                ),
+                              ),
                             ),
-                            onTap: () {
-                               final targetPhoneNumber = data['phoneNumber'];
-                                if (targetPhoneNumber != null) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const AdminUserProfileScreen(),
-                                      settings: RouteSettings(
-                                        arguments: AdminUserProfileArguments(
-                                          targetPhoneNumber: targetPhoneNumber,
-                                          viewerPhoneNumber: widget.viewerPhoneNumber,
-                                          viewerPermissionLevel: widget.viewerPermissionLevel,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }
-                            },
-                          ),
-                        );
+                          );
+                        }
                       },
-                      childCount: _foundUsers.length,
                     ),
-                  )
+                  );
+                },
+                childCount: _foundUsers.length,
+              ),
+            )
                 : const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(child: Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 18))),
-                  ),
+              hasScrollBody: false,
+              child: Center(child: Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 18))),
+            ),
           ],
         ),
       ),
+      ),
+
     );
   }
 
@@ -287,7 +289,7 @@ class _AdminStudentTabState extends State<AdminStudentTab> {
               });
             }),
             const Divider(),
-            _buildFilterSection('태그 (특별팀)', TeamUtils.allTeams, _selectedTags, (value) {
+            _buildFilterSection('사역팀', TeamUtils.allTeams, _selectedTags, (value) {
               setState(() {
                 _selectedTags.contains(value)
                     ? _selectedTags.remove(value)
@@ -296,11 +298,12 @@ class _AdminStudentTabState extends State<AdminStudentTab> {
             }),
             const Divider(),
             _buildPrayerRequestFilter(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             ElevatedButton(
               onPressed: _applyFiltersAndCollapse,
               child: const Center(child: Text('필터 적용')),
             ),
+            const Divider(),
           ],
         ),
       ),
@@ -311,10 +314,10 @@ class _AdminStudentTabState extends State<AdminStudentTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 8),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 6),
         Wrap(
-          spacing: 8.0,
+          spacing: 6.0,
           children: (options is List<String> ? options : (options as Map).keys).map<Widget>((key) {
             final label = options is List<String> ? key : options[key]!;
             final value = options is List<String> ? key : key;
